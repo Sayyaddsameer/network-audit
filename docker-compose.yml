@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────
+  # Stores policy snapshots and violation history for auditing.
+  # The migrations/ folder is mounted to the init directory so the
+  # schema is created automatically on first boot.
+  db:
+    image: postgres:13
+    container_name: audit-engine-db
+    env_file: .env
+    volumes:
+      - ./migrations:/docker-entrypoint-initdb.d/
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Audit Service (FastAPI) ─────────────────────────────────────
+  # Talks to the Kubernetes API to fetch NetworkPolicies, evaluates
+  # them against zero-trust rules, and persists findings to Postgres.
+  audit-service:
+    build:
+      context: .
+    container_name: audit-engine-service
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount the host's kubeconfig so the service can reach the K8s API.
+      # Read-only because we only need to list/get NetworkPolicies.
+      - ${HOME}/.kube:/home/appuser/.kube:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      start_period: 15s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── Prometheus ──────────────────────────────────────────────────
+  # Scrapes /metrics from the audit service for real-time visibility
+  # into violation counts, blocked connections, and egress attempts.
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: audit-engine-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - audit-service
+
+volumes:
+  pgdata:
