@@ -1,0 +1,25 @@
+# Kubernetes Namespaces for the Microservice Demo
+# These namespaces segregate the application components and provide boundaries for network policies.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: frontend
+  labels:
+    app.kubernetes.io/part-of: microservice-demo
+    kubernetes.io/metadata.name: frontend
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/part-of: microservice-demo
+    kubernetes.io/metadata.name: backend
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+  labels:
+    app.kubernetes.io/part-of: microservice-demo
+    kubernetes.io/metadata.name: database
